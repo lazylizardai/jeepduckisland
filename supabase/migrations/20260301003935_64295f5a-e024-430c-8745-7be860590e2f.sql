@@ -1,1 +1,2 @@
-alter table "public"."profiles" add column if not exists "bio" text;
+-- Remove the overly permissive UPDATE policy on ducks
+DROP POLICY IF EXISTS "Owners can update their ducks" ON public.ducks;

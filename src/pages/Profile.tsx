@@ -1,179 +1,255 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import Navigation from "@/components/Navigation";
-import { useToast } from "@/hooks/use-toast";
-import { User, LogOut, Trophy, Camera, Edit3, Save, X, Coins } from "lucide-react";
+import { Camera, Save, LogOut, User, MapPin, Mail, Loader2 } from "lucide-react";
 
-const DUCK_AVATARS = ["🦆", "🐦", "🦢", "👑", "⭐", "🌟", "🍊", "🏆"];
+interface ProfileData {
+  username: string;
+  full_name: string;
+  bio: string;
+  location: string;
+  avatar_url: string;
+}
 
 const Profile = () => {
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-  const [editForm, setEditForm] = useState({ username: "", avatar_emoji: "🦆" });
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [profile, setProfile] = useState<ProfileData>({
+    username: "",
+    full_name: "",
+    bio: "",
+    location: "",
+    avatar_url: "",
+  });
 
   useEffect(() => {
-    const loadProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { navigate("/auth"); return; }
-      setUser(session.user);
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-      if (data) {
-        setProfile(data);
-        setEditForm({ username: data.username || "", avatar_emoji: data.avatar_emoji || "🦆" });
-      }
-      setLoading(false);
-    };
-    loadProfile();
-  }, [navigate]);
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    fetchProfile();
+  }, [user, navigate]);
+
+  const fetchProfile = async () => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    
+    if (error && error.code !== "PGRST116") {
+      console.error("Error fetching profile:", error);
+    } else if (data) {
+      setProfile({
+        username: data.username || "",
+        full_name: data.full_name || "",
+        bio: data.bio || "",
+        location: data.location || "",
+        avatar_url: data.avatar_url || "",
+      });
+    }
+    setLoading(false);
+  };
 
   const handleSave = async () => {
     if (!user) return;
+    setSaving(true);
+    
     const { error } = await supabase
       .from("profiles")
-      .update({ username: editForm.username, avatar_emoji: editForm.avatar_emoji })
-      .eq("id", user.id);
+      .upsert({
+        id: user.id,
+        ...profile,
+        updated_at: new Date().toISOString(),
+      });
+    
     if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      toast.error("Kon profiel niet opslaan: " + error.message);
     } else {
-      setProfile((prev: any) => ({ ...prev, ...editForm }));
-      setIsEditing(false);
-      toast({ title: "Profile updated!" });
+      toast.success("Profiel opgeslagen!");
     }
+    setSaving(false);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    
+    setUploadingAvatar(true);
+    
+    const fileExt = file.name.split(".").pop();
+    const filePath = `${user.id}/avatar.${fileExt}`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, { upsert: true });
+    
+    if (uploadError) {
+      toast.error("Kon avatar niet uploaden");
+      setUploadingAvatar(false);
+      return;
+    }
+    
+    const { data: { publicUrl } } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(filePath);
+    
+    setProfile((prev) => ({ ...prev, avatar_url: publicUrl }));
+    setUploadingAvatar(false);
+    toast.success("Avatar geüpload!");
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
     navigate("/");
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-4xl animate-bounce">🦆</div>
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-duck-yellow/20 via-background to-duck-teal/20">
+    <div className="min-h-screen bg-gradient-to-b from-primary/20 via-secondary/10 to-accent/20">
       <Navigation />
-      <div className="pt-20 pb-10 container mx-auto px-4 max-w-2xl">
-        <div className="card-tropical bg-card p-6 mb-6">
-          <div className="flex items-start justify-between mb-4">
-            <h1 className="font-display text-3xl">My Profile</h1>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-1" /> Sign Out
-            </Button>
-          </div>
+      
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] mb-6">
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="font-display text-4xl">Mijn Profiel</h1>
+              <Button
+                variant="outline"
+                onClick={handleSignOut}
+                className="border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Uitloggen
+              </Button>
+            </div>
 
-          <div className="flex items-start gap-6">
             {/* Avatar */}
-            <div className="relative">
-              <div className="w-20 h-20 bg-duck-yellow rounded-2xl border-4 border-outline flex items-center justify-center text-4xl">
-                {isEditing ? editForm.avatar_emoji : (profile?.avatar_emoji || "🦆")}
-              </div>
-              {isEditing && (
+            <div className="flex items-center gap-6 mb-6">
+              <div className="relative">
+                <Avatar className="w-24 h-24 border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                  <AvatarImage src={profile.avatar_url} />
+                  <AvatarFallback className="bg-primary text-primary-foreground font-display text-3xl">
+                    {profile.username?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "?"}
+                  </AvatarFallback>
+                </Avatar>
                 <button
-                  onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-                  className="absolute -bottom-1 -right-1 w-7 h-7 bg-duck-orange rounded-full border-2 border-outline flex items-center justify-center"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute -bottom-2 -right-2 bg-primary rounded-full p-2 border-2 border-foreground shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:bg-primary/80 transition-colors"
+                  disabled={uploadingAvatar}
                 >
-                  <Camera className="w-3 h-3 text-white" />
+                  {uploadingAvatar ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Camera className="h-4 w-4" />
+                  )}
                 </button>
-              )}
-              {showAvatarPicker && (
-                <div className="absolute top-full mt-2 left-0 z-50 bg-card border-4 border-outline rounded-2xl p-3 shadow-xl grid grid-cols-4 gap-2">
-                  {DUCK_AVATARS.map(emoji => (
-                    <button
-                      key={emoji}
-                      onClick={() => { setEditForm(prev => ({ ...prev, avatar_emoji: emoji })); setShowAvatarPicker(false); }}
-                      className="text-2xl p-2 hover:bg-muted rounded-xl"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1">
-              {isEditing ? (
-                <div className="space-y-3">
-                  <div>
-                    <Label className="font-display">Username</Label>
-                    <Input
-                      value={editForm.username}
-                      onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))}
-                      className="border-2 border-outline mt-1"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={handleSave} className="btn-primary">
-                      <Save className="w-4 h-4 mr-1" /> Save
-                    </Button>
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h2 className="font-display text-2xl">{profile?.username || "Anonymous Duck"}</h2>
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <p className="font-body text-muted-foreground text-sm">{user?.email}</p>
-                </>
-              )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+              </div>
+              <div>
+                <p className="font-display text-2xl">{profile.username || "Geen username"}</p>
+                <p className="text-muted-foreground flex items-center gap-1">
+                  <Mail className="h-4 w-4" />
+                  {user?.email}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          {[
-            { label: "Ducks Spotted", value: profile?.ducks_spotted || 0, emoji: "🦆" },
-            { label: "QUACK Tokens", value: (profile?.quack_tokens || 0).toLocaleString(), emoji: "💰" },
-            { label: "Rank", value: `#${profile?.rank || "?"}`, emoji: "🏆" },
-          ].map((stat, i) => (
-            <div key={i} className="card-tropical bg-card p-4 text-center hover-lift">
-              <div className="text-3xl mb-1">{stat.emoji}</div>
-              <div className="font-display text-xl">{stat.value}</div>
-              <div className="font-body text-xs text-muted-foreground">{stat.label}</div>
+          {/* Edit Form */}
+          <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <h2 className="font-display text-2xl mb-6">Profiel bewerken</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="username" className="font-display text-lg">Username</Label>
+                <Input
+                  id="username"
+                  value={profile.username}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, username: e.target.value }))}
+                  placeholder="jouw_username"
+                  className="border-4 border-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="full_name" className="font-display text-lg">Volledige naam</Label>
+                <Input
+                  id="full_name"
+                  value={profile.full_name}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Jan de Vries"
+                  className="border-4 border-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="location" className="font-display text-lg">
+                  <MapPin className="inline h-4 w-4 mr-1" />
+                  Locatie
+                </Label>
+                <Input
+                  id="location"
+                  value={profile.location}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, location: e.target.value }))}
+                  placeholder="Amsterdam, NL"
+                  className="border-4 border-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mt-1"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="bio" className="font-display text-lg">Bio</Label>
+                <Textarea
+                  id="bio"
+                  value={profile.bio}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))}
+                  placeholder="Vertel iets over jezelf..."
+                  className="border-4 border-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mt-1"
+                  rows={3}
+                />
+              </div>
+              
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full font-display text-xl py-6 bg-primary hover:bg-primary/90 text-primary-foreground border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                {saving ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Opslaan...</>
+                ) : (
+                  <><Save className="mr-2 h-5 w-5" /> Profiel Opslaan</>
+                )}
+              </Button>
             </div>
-          ))}
-        </div>
-
-        {/* Level/XP */}
-        <div className="card-tropical bg-card p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display text-xl">Level Progress</h2>
-            <Badge className="bg-duck-orange text-white">Level {profile?.level || 1}</Badge>
           </div>
-          <div className="h-3 bg-muted rounded-full overflow-hidden border-2 border-outline">
-            <div
-              className="h-full bg-gradient-to-r from-duck-yellow to-duck-orange"
-              style={{ width: `${((profile?.xp || 0) % 1000) / 10}%` }}
-            />
-          </div>
-          <p className="font-body text-xs text-muted-foreground mt-1">
-            {(profile?.xp || 0) % 1000} / 1000 XP to next level
-          </p>
         </div>
       </div>
     </div>

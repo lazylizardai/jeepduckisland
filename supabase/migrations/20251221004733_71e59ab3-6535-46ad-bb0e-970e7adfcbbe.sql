@@ -1,56 +1,57 @@
--- Function to record a duck scan and award points
-CREATE OR REPLACE FUNCTION public.record_duck_scan(
-  p_duck_qr_code TEXT,
-  p_user_id UUID,
-  p_location TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_duck public.ducks%ROWTYPE;
-  v_points INTEGER;
-  v_xp INTEGER;
-BEGIN
-  -- Get duck
-  SELECT * INTO v_duck FROM public.ducks WHERE qr_code = p_duck_qr_code AND is_active = true;
-  
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Duck not found');
-  END IF;
-  
-  -- Calculate points based on rarity
-  v_points := CASE v_duck.rarity
-    WHEN 'Common' THEN 10
-    WHEN 'Uncommon' THEN 25
-    WHEN 'Rare' THEN 100
-    WHEN 'Epic' THEN 250
-    WHEN 'Legendary' THEN 500
-    ELSE 10
-  END;
-  
-  v_xp := v_points * 2;
-  
-  -- Record sighting
-  INSERT INTO public.duck_sightings (duck_id, user_id, location_name, rarity, verified)
-  VALUES (v_duck.id, p_user_id, p_location, v_duck.rarity, true);
-  
-  -- Award points to user
-  UPDATE public.profiles
-  SET 
-    quack_tokens = quack_tokens + v_points,
-    ducks_spotted = ducks_spotted + 1,
-    xp = xp + v_xp,
-    level = GREATEST(1, FLOOR((xp + v_xp) / 1000) + 1),
-    updated_at = NOW()
-  WHERE id = p_user_id;
-  
-  RETURN jsonb_build_object(
-    'success', true,
-    'duck', row_to_json(v_duck),
-    'points_earned', v_points,
-    'xp_earned', v_xp
+-- Fix Warning-Level Security Issues: Storage and Profile Policies
+
+-- 1. Fix storage: Remove duplicate/conflicting upload policies for duckshots
+-- Keep only authenticated upload (more secure)
+DROP POLICY IF EXISTS "Anyone can upload duckshots" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload duckshots" ON storage.objects;
+
+-- Recreate: allow both authenticated and anonymous (tourists don't need accounts)
+CREATE POLICY "Public can upload duckshots" ON storage.objects
+  FOR INSERT 
+  WITH CHECK (
+    bucket_id = 'duckshots' AND
+    (storage.extension(name) IN ('jpg', 'jpeg', 'png', 'webp', 'gif')) AND
+    (octet_length(encode(name::bytea, 'base64')) < 200) -- max filename length
   );
-END;
-$$;
+
+-- 2. Add UPDATE policy for duckshots (for replacing photos)
+CREATE POLICY "Users can update their own duckshots" ON storage.objects
+  FOR UPDATE 
+  USING (
+    bucket_id = 'duckshots' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- 3. Add DELETE policy for duckshots
+CREATE POLICY "Users can delete their own duckshots" ON storage.objects
+  FOR DELETE 
+  USING (
+    bucket_id = 'duckshots' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- 4. Fix profiles: Ensure upsert works properly
+-- The current INSERT policy requires auth.uid() = id which is correct
+-- But we need to make sure the upsert (used in Profile.tsx) works
+-- Add a more explicit upsert-compatible policy
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+
+CREATE POLICY "Users can insert their own profile" ON public.profiles
+  FOR INSERT 
+  WITH CHECK (auth.uid() = id);
+
+-- 5. Game scores: Add DELETE for own scores (for privacy/GDPR)
+CREATE POLICY "Users can delete their own scores" ON public.game_scores
+  FOR DELETE 
+  USING (auth.uid() = user_id);
+
+-- 6. Ducks: Add explicit SELECT for inactive ducks (only owner can see)
+CREATE POLICY "Owners can see their inactive ducks" ON public.ducks
+  FOR SELECT 
+  USING (
+    is_active = true OR auth.uid() = owner_id
+  );
+
+-- Note: This replaces the blanket "Anyone can view ducks" policy
+-- We need to drop the old one first
+DROP POLICY IF EXISTS "Anyone can view ducks" ON public.ducks;

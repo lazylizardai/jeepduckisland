@@ -1,229 +1,448 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import Navigation from "@/components/Navigation";
-import { Timer, Trophy, ArrowLeft, RotateCcw, Lightbulb } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Play, Trophy, RotateCcw, Timer, Volume2, VolumeX } from "lucide-react";
+import quackyJack from "@/assets/quacky-jack.png";
+import { useGameSounds } from "@/hooks/useGameSounds";
 
-const PUZZLE_LEVELS = [
-  {
-    id: 1,
-    image: ["🦆", "🌳", "🚙", "🏖️", "🌊", "☀️", "🌴", "🌿", "🐟"],
-    size: 3,
-    name: "Duck at the Beach",
-  },
-  {
-    id: 2,
-    image: ["🦆", "🦆", "🌳", "🚙", "🌼", "🚙", "🌿", "🌿", "🏖️", "☀️", "🌊", "🌴", "🌟", "🐟", "☁️", "🐛"],
-    size: 4,
-    name: "Duck Island",
-  },
-  {
-    id: 3,
-    image: ["🦆", "🦆", "🦆", "🌳", "🚙",
-            "🌼", "🚙", "🌿", "🐦", "🏖️",
-            "☀️", "🌊", "🌴", "🌟", "🐟",
-            "☁️", "🐛", "🌺", "🐞", "🍁",
-            "🦋", "🌋", "🏆", "💫", "💰"],
-    size: 5,
-    name: "Duck Kingdom",
-  }
-];
-
-interface PuzzlePiece {
+interface Tile {
   id: number;
   currentPos: number;
-  emoji: string;
+  correctPos: number;
 }
 
+type Difficulty = 3 | 4 | 5;
+
+const DIFFICULTY_CONFIG = {
+  3: { label: "Easy", emoji: "🟢", baseScore: 10000, timePenalty: 10, movePenalty: 5 },
+  4: { label: "Medium", emoji: "🟡", baseScore: 15000, timePenalty: 8, movePenalty: 4 },
+  5: { label: "Hard", emoji: "🔴", baseScore: 25000, timePenalty: 5, movePenalty: 3 },
+};
+
+const TILE_EMOJIS = [
+  "🦆", "🚙", "🌴", "🏝️", "☀️", "🌊", "🎯", "⭐",
+  "🌺", "🐚", "🥥", "🦜", "🍍", "🌈", "🎣", "⛵",
+  "🏄", "🌅", "🐠", "🦀", "🌸", "💎", "🔥", "🎪"
+];
+
 const DuckPuzzle = () => {
-  const [selectedLevel, setSelectedLevel] = useState(0);
-  const [pieces, setPieces] = useState<PuzzlePiece[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [gameState, setGameState] = useState<"idle" | "playing" | "ended">("idle");
+  const [gridSize, setGridSize] = useState<Difficulty>(3);
+  const [tiles, setTiles] = useState<Tile[]>([]);
   const [moves, setMoves] = useState(0);
   const [timeElapsed, setTimeElapsed] = useState(0);
-  const [gameState, setGameState] = useState<"select" | "playing" | "won">("select");
-  const [hints, setHints] = useState(3);
-  const [showHint, setShowHint] = useState<number | null>(null);
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const [bestTimes, setBestTimes] = useState<Record<Difficulty, number | null>>({ 3: null, 4: null, 5: null });
+  const [soundOn, setSoundOn] = useState(true);
+  const { playSound, setSoundEnabled } = useGameSounds();
 
-  const initPuzzle = (levelIdx: number) => {
-    const level = PUZZLE_LEVELS[levelIdx];
-    const shuffled = [...level.image]
-      .map((emoji, id) => ({ id, currentPos: id, emoji }))
-      .sort(() => Math.random() - 0.5)
-      .map((piece, pos) => ({ ...piece, currentPos: pos }));
-    setPieces(shuffled);
-    setSelected(null);
-    setMoves(0);
-    setTimeElapsed(0);
-    setGameState("playing");
-    setSelectedLevel(levelIdx);
-    setHints(3);
-  };
+  const totalTiles = gridSize * gridSize;
 
+  // Sync sound state
+  useEffect(() => {
+    setSoundEnabled(soundOn);
+  }, [soundOn, setSoundEnabled]);
+
+  // Load best times
+  useEffect(() => {
+    const times: Record<Difficulty, number | null> = { 3: null, 4: null, 5: null };
+    ([3, 4, 5] as Difficulty[]).forEach((size) => {
+      const saved = localStorage.getItem(`duckpuzzle-besttime-${size}`);
+      if (saved) times[size] = parseInt(saved, 10);
+    });
+    setBestTimes(times);
+  }, []);
+
+  // Timer
   useEffect(() => {
     if (gameState !== "playing") return;
-    const timer = setInterval(() => setTimeElapsed(prev => prev + 1), 1000);
+
+    const timer = setInterval(() => {
+      setTimeElapsed((prev) => prev + 1);
+    }, 1000);
+
     return () => clearInterval(timer);
   }, [gameState]);
 
-  const checkWin = (currentPieces: PuzzlePiece[]) => {
-    return currentPieces.every(piece => piece.id === piece.currentPos);
-  };
+  // Check win condition
+  useEffect(() => {
+    if (gameState !== "playing" || tiles.length === 0) return;
 
-  const handlePieceClick = (pos: number) => {
-    if (gameState !== "playing") return;
-    if (selected === null) {
-      setSelected(pos);
-    } else if (selected === pos) {
-      setSelected(null);
-    } else {
-      const newPieces = [...pieces];
-      const fromIdx = newPieces.findIndex(p => p.currentPos === selected);
-      const toIdx = newPieces.findIndex(p => p.currentPos === pos);
-      if (fromIdx !== -1 && toIdx !== -1) {
-        [newPieces[fromIdx].currentPos, newPieces[toIdx].currentPos] =
-          [newPieces[toIdx].currentPos, newPieces[fromIdx].currentPos];
-        setPieces(newPieces);
-        setMoves(prev => prev + 1);
-        setSelected(null);
-        if (checkWin(newPieces)) {
-          setGameState("won");
-          toast({
-            title: "Puzzle solved! 🎉",
-            description: `${moves + 1} moves in ${timeElapsed}s`
-          });
-        }
+    const isSolved = tiles.every((tile) => tile.currentPos === tile.correctPos);
+    if (isSolved) {
+      playSound("win");
+      setGameState("ended");
+      const currentBest = bestTimes[gridSize];
+      if (!currentBest || timeElapsed < currentBest) {
+        setBestTimes((prev) => ({ ...prev, [gridSize]: timeElapsed }));
+        localStorage.setItem(`duckpuzzle-besttime-${gridSize}`, timeElapsed.toString());
       }
     }
-  };
+  }, [tiles, gameState, timeElapsed, bestTimes, gridSize, playSound]);
 
-  const useHint = () => {
-    if (hints <= 0) return;
-    const wrongPiece = pieces.find(p => p.id !== p.currentPos);
-    if (wrongPiece) {
-      setShowHint(wrongPiece.currentPos);
-      setHints(prev => prev - 1);
-      setTimeout(() => setShowHint(null), 2000);
+  const shuffleTiles = () => {
+    const newTiles: Tile[] = [];
+    const positions = Array.from({ length: totalTiles - 1 }, (_, i) => i);
+    
+    // Fisher-Yates shuffle
+    for (let i = positions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [positions[i], positions[j]] = [positions[j], positions[i]];
     }
+
+    // Ensure puzzle is solvable
+    let inversions = 0;
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        if (positions[i] > positions[j]) inversions++;
+      }
+    }
+    
+    // For odd grid sizes, need even inversions; for even grid sizes, more complex rule
+    if (gridSize % 2 === 1) {
+      if (inversions % 2 !== 0) {
+        [positions[0], positions[1]] = [positions[1], positions[0]];
+      }
+    } else {
+      // For even grid, the blank is in the last row (gridSize-1 from bottom = row 0)
+      const blankRowFromBottom = 1; // blank is at bottom
+      if ((inversions + blankRowFromBottom) % 2 === 0) {
+        [positions[0], positions[1]] = [positions[1], positions[0]];
+      }
+    }
+
+    positions.forEach((pos, index) => {
+      newTiles.push({
+        id: pos + 1,
+        currentPos: index,
+        correctPos: pos,
+      });
+    });
+
+    // Add empty tile
+    newTiles.push({
+      id: 0,
+      currentPos: totalTiles - 1,
+      correctPos: totalTiles - 1,
+    });
+
+    return newTiles;
   };
 
-  const level = PUZZLE_LEVELS[selectedLevel];
+  const startGame = (size?: Difficulty) => {
+    playSound("gameStart");
+    if (size) setGridSize(size);
+    const newSize = size || gridSize;
+    const newTotalTiles = newSize * newSize;
+    
+    // Generate tiles for the new size
+    const newTiles: Tile[] = [];
+    const positions = Array.from({ length: newTotalTiles - 1 }, (_, i) => i);
+    
+    for (let i = positions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [positions[i], positions[j]] = [positions[j], positions[i]];
+    }
+
+    let inversions = 0;
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        if (positions[i] > positions[j]) inversions++;
+      }
+    }
+    
+    if (newSize % 2 === 1) {
+      if (inversions % 2 !== 0) {
+        [positions[0], positions[1]] = [positions[1], positions[0]];
+      }
+    } else {
+      const blankRowFromBottom = 1;
+      if ((inversions + blankRowFromBottom) % 2 === 0) {
+        [positions[0], positions[1]] = [positions[1], positions[0]];
+      }
+    }
+
+    positions.forEach((pos, index) => {
+      newTiles.push({
+        id: pos + 1,
+        currentPos: index,
+        correctPos: pos,
+      });
+    });
+
+    newTiles.push({
+      id: 0,
+      currentPos: newTotalTiles - 1,
+      correctPos: newTotalTiles - 1,
+    });
+
+    setTiles(newTiles);
+    setMoves(0);
+    setTimeElapsed(0);
+    setGameState("playing");
+  };
+
+  const getEmptyTilePos = () => {
+    return tiles.find((t) => t.id === 0)?.currentPos ?? -1;
+  };
+
+  const canMove = (pos: number) => {
+    const emptyPos = getEmptyTilePos();
+    const emptyRow = Math.floor(emptyPos / gridSize);
+    const emptyCol = emptyPos % gridSize;
+    const tileRow = Math.floor(pos / gridSize);
+    const tileCol = pos % gridSize;
+
+    return (
+      (Math.abs(emptyRow - tileRow) === 1 && emptyCol === tileCol) ||
+      (Math.abs(emptyCol - tileCol) === 1 && emptyRow === tileRow)
+    );
+  };
+
+  const moveTile = (pos: number) => {
+    if (gameState !== "playing" || !canMove(pos)) return;
+
+    playSound("tileMove");
+    const emptyPos = getEmptyTilePos();
+    setTiles((prev) =>
+      prev.map((tile) => {
+        if (tile.currentPos === pos) {
+          return { ...tile, currentPos: emptyPos };
+        }
+        if (tile.id === 0) {
+          return { ...tile, currentPos: pos };
+        }
+        return tile;
+      })
+    );
+    setMoves((m) => m + 1);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const getScore = () => {
+    const config = DIFFICULTY_CONFIG[gridSize];
+    const timePenalty = timeElapsed * config.timePenalty;
+    const movePenalty = moves * config.movePenalty;
+    return Math.max(0, config.baseScore - timePenalty - movePenalty);
+  };
+
+  const getTileColor = (id: number) => {
+    if (id === 0) return "bg-transparent";
+    const colors = [
+      "bg-primary", "bg-secondary", "bg-accent",
+      "bg-coral", "bg-turquoise", "bg-palm",
+      "bg-primary/80", "bg-secondary/80", "bg-accent/80",
+      "bg-coral/80", "bg-turquoise/80", "bg-palm/80",
+      "bg-primary/60", "bg-secondary/60", "bg-accent/60",
+      "bg-coral/60", "bg-turquoise/60", "bg-palm/60",
+      "bg-primary/90", "bg-secondary/90", "bg-accent/90",
+      "bg-coral/90", "bg-turquoise/90", "bg-palm/90",
+    ];
+    return colors[(id - 1) % colors.length];
+  };
+
+  const getTileEmoji = (id: number) => {
+    if (id === 0 || id > TILE_EMOJIS.length) return id.toString();
+    return TILE_EMOJIS[id - 1];
+  };
+
+  const getTileSize = () => {
+    if (gridSize === 3) return "text-4xl";
+    if (gridSize === 4) return "text-3xl";
+    return "text-2xl";
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-duck-teal/30 via-background to-duck-yellow/20">
-      <Navigation />
-      <div className="pt-20 pb-10 container mx-auto px-4">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" onClick={() => navigate("/games")}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
-          <h1 className="font-display text-4xl">Duck Puzzle</h1>
-        </div>
+    <div className="min-h-screen bg-gradient-to-b from-turquoise via-turquoise/80 to-palm overflow-hidden">
+      {/* Header */}
+      <div className="container mx-auto px-4 py-4 flex justify-between items-center relative z-20">
+        <Link to="/games" className="inline-flex items-center text-foreground hover:text-primary transition-colors font-bold bg-card/80 px-3 py-2 rounded-full">
+          <ArrowLeft className="mr-2 h-5 w-5" />
+          Games
+        </Link>
 
-        {gameState === "select" ? (
-          <div className="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto">
-            {PUZZLE_LEVELS.map((lvl, idx) => (
-              <button
-                key={lvl.id}
-                onClick={() => initPuzzle(idx)}
-                className="card-tropical bg-card p-6 text-center hover-lift text-left"
-              >
-                <div className="grid gap-1 mb-4" style={{ gridTemplateColumns: `repeat(${lvl.size}, 1fr)` }}>
-                  {lvl.image.map((emoji, i) => (
-                    <span key={i} className="text-2xl">{emoji}</span>
-                  ))}
-                </div>
-                <h3 className="font-display text-xl">{lvl.name}</h3>
-                <p className="font-body text-sm text-muted-foreground">{lvl.size}x{lvl.size} grid</p>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <>
-            {/* Stats bar */}
-            <div className="flex gap-4 mb-6 flex-wrap">
-              <Badge className="text-lg px-4 py-2 bg-duck-yellow text-black">
-                <Trophy className="w-4 h-4 mr-1" /> Moves: {moves}
-              </Badge>
-              <Badge variant="outline" className="text-lg px-4 py-2">
-                <Timer className="w-4 h-4 mr-1" /> {timeElapsed}s
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={useHint}
-                disabled={hints <= 0}
-                className="text-lg"
-              >
-                <Lightbulb className="w-4 h-4 mr-1" /> Hints: {hints}
-              </Button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSoundOn(!soundOn)}
+            className="bg-card/90 px-3 py-2 rounded-full border-2 border-foreground shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+          >
+            {soundOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+          </button>
+          {bestTimes[gridSize] && (
+            <div className="bg-card/90 px-4 py-2 rounded-full border-2 border-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-primary" />
+              <span className="font-display text-lg">{formatTime(bestTimes[gridSize]!)}</span>
             </div>
+          )}
+        </div>
+      </div>
 
-            {gameState === "won" && (
-              <div className="card-tropical bg-card p-6 text-center mb-6 max-w-md mx-auto">
-                <div className="text-5xl mb-2">🎉</div>
-                <h2 className="font-display text-3xl mb-2">Puzzle Complete!</h2>
-                <p className="font-body">{moves} moves in {timeElapsed} seconds</p>
-                <div className="flex gap-3 justify-center mt-4">
-                  <Button onClick={() => setGameState("select")} className="btn-primary">
-                    Choose Level
-                  </Button>
-                  <Button variant="outline" onClick={() => initPuzzle(selectedLevel)}>
-                    <RotateCcw className="w-4 h-4 mr-1" /> Retry
-                  </Button>
-                </div>
+      {/* Game Area */}
+      <div className="container mx-auto px-4 py-4">
+        <div className="relative max-w-md mx-auto">
+          {/* HUD */}
+          {gameState === "playing" && (
+            <div className="flex gap-4 justify-center mb-6 flex-wrap">
+              <div className="bg-card px-4 py-2 rounded-xl border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <span className="font-display text-xl flex items-center gap-2">
+                  <Timer className="h-5 w-5" />
+                  {formatTime(timeElapsed)}
+                </span>
               </div>
-            )}
+              <div className="bg-card px-4 py-2 rounded-xl border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <span className="font-display text-xl">Moves: {moves}</span>
+              </div>
+              <div className="bg-card px-4 py-2 rounded-xl border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <span className="font-display text-lg">{gridSize}x{gridSize}</span>
+              </div>
+            </div>
+          )}
 
-            {/* Puzzle grid */}
-            <div className="max-w-lg mx-auto">
-              <h2 className="font-display text-2xl mb-4 text-center">{level.name}</h2>
-              <div
-                className="grid gap-2 p-4 bg-card rounded-3xl border-4 border-outline shadow-cartoon-lg"
-                style={{ gridTemplateColumns: `repeat(${level.size}, 1fr)` }}
+          {/* Puzzle Grid */}
+          {gameState === "playing" && (
+            <div className="bg-card p-4 rounded-2xl border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+              <div 
+                className="grid gap-2"
+                style={{ gridTemplateColumns: `repeat(${gridSize}, 1fr)` }}
               >
-                {Array.from({ length: level.size * level.size }).map((_, pos) => {
-                  const piece = pieces.find(p => p.currentPos === pos);
-                  const isSelected = selected === pos;
-                  const isHinted = showHint === pos;
-                  const isCorrect = piece?.id === pos;
+                {Array.from({ length: totalTiles }).map((_, pos) => {
+                  const tile = tiles.find((t) => t.currentPos === pos);
+                  if (!tile || tile.id === 0) {
+                    return (
+                      <div
+                        key={pos}
+                        className="aspect-square rounded-xl bg-muted/30"
+                      />
+                    );
+                  }
                   return (
                     <button
                       key={pos}
-                      onClick={() => handlePieceClick(pos)}
-                      className={`
-                        aspect-square rounded-xl border-3 text-3xl font-bold transition-all
-                        ${isSelected ? "border-duck-orange bg-duck-yellow/50 scale-110 shadow-lg" :
-                          isHinted ? "border-red-400 bg-red-100 animate-pulse" :
-                          isCorrect && gameState === "won" ? "border-green-400 bg-green-100" :
-                          "border-outline bg-muted/50 hover:bg-muted cursor-pointer hover:scale-105"}
-                      `}
-                      disabled={gameState === "won"}
+                      onClick={() => moveTile(pos)}
+                      disabled={!canMove(pos)}
+                      className={`aspect-square rounded-xl ${getTileColor(tile.id)} border-4 border-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center font-display ${getTileSize()} text-foreground transition-all ${
+                        canMove(pos) ? "hover:scale-105 cursor-pointer" : "cursor-default"
+                      }`}
                     >
-                      {piece?.emoji}
+                      {getTileEmoji(tile.id)}
                     </button>
                   );
                 })}
               </div>
-              <p className="text-center font-body text-sm text-muted-foreground mt-3">
-                Click a piece, then click where to move it
-              </p>
             </div>
+          )}
 
-            {gameState === "playing" && (
-              <div className="text-center mt-4">
-                <Button variant="outline" onClick={() => initPuzzle(selectedLevel)}>
-                  <RotateCcw className="w-4 h-4 mr-1" /> Restart
-                </Button>
+          {/* Idle Screen */}
+          {gameState === "idle" && (
+            <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] text-center">
+              <img src={quackyJack} alt="Duck" className="w-24 h-24 mx-auto mb-4 animate-bounce" />
+              <h1 className="font-display text-5xl text-foreground mb-4">Duck Puzzle!</h1>
+              <p className="text-muted-foreground mb-6">
+                Schuif de tegels om de puzzel op te lossen. Hoe sneller, hoe hoger je score!
+              </p>
+
+              {/* Difficulty Selection */}
+              <div className="mb-6">
+                <p className="font-display text-xl mb-3">Kies moeilijkheid:</p>
+                <div className="flex gap-3 justify-center">
+                  {([3, 4, 5] as Difficulty[]).map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => setGridSize(size)}
+                      className={`p-4 rounded-xl border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all ${
+                        gridSize === size 
+                          ? "bg-primary scale-105" 
+                          : "bg-card hover:bg-muted"
+                      }`}
+                    >
+                      <p className="font-display text-2xl">{size}x{size}</p>
+                      <p className="text-sm">{DIFFICULTY_CONFIG[size].emoji} {DIFFICULTY_CONFIG[size].label}</p>
+                      {bestTimes[size] && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          🏆 {formatTime(bestTimes[size]!)}
+                        </p>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
-          </>
-        )}
+
+              <Button
+                onClick={() => startGame()}
+                className="font-display text-2xl py-6 px-8 bg-primary hover:bg-primary/90 text-primary-foreground border-4 border-foreground shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[3px] hover:translate-y-[3px] transition-all"
+              >
+                <Play className="mr-2 h-6 w-6" />
+                Start {gridSize}x{gridSize}!
+              </Button>
+            </div>
+          )}
+
+          {/* Game Over Screen */}
+          {gameState === "ended" && (
+            <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] text-center animate-scale-in">
+              <h2 className="font-display text-5xl text-foreground mb-2">Opgelost! 🎉</h2>
+              <p className="text-muted-foreground mb-4">{gridSize}x{gridSize} {DIFFICULTY_CONFIG[gridSize].label}</p>
+
+              <div className="my-6">
+                <p className="text-muted-foreground">Score</p>
+                <p className="font-display text-6xl text-primary">{getScore()}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6 text-center">
+                <div className="bg-muted/50 p-3 rounded-xl">
+                  <p className="font-display text-2xl text-turquoise">{formatTime(timeElapsed)}</p>
+                  <p className="text-xs text-muted-foreground">Tijd</p>
+                </div>
+                <div className="bg-muted/50 p-3 rounded-xl">
+                  <p className="font-display text-2xl text-coral">{moves}</p>
+                  <p className="text-xs text-muted-foreground">Moves</p>
+                </div>
+              </div>
+
+              {bestTimes[gridSize] === timeElapsed && (
+                <div className="bg-primary/20 rounded-xl p-3 mb-4 border-2 border-primary">
+                  <p className="font-display text-xl text-primary flex items-center justify-center gap-2">
+                    <Trophy className="h-6 w-6" />
+                    Nieuwe Beste Tijd!
+                  </p>
+                </div>
+              )}
+
+              <div className="bg-muted/30 rounded-xl p-3 mb-6 border border-foreground/10">
+                <p className="text-sm text-muted-foreground">🔐 Score opslaan (coming soon!)</p>
+              </div>
+
+              <div className="flex gap-4 justify-center flex-wrap">
+                <Button
+                  onClick={() => startGame()}
+                  className="font-display text-xl py-5 px-6 bg-primary hover:bg-primary/90 text-primary-foreground border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                >
+                  <RotateCcw className="mr-2 h-5 w-5" />
+                  Opnieuw
+                </Button>
+                <Button
+                  onClick={() => setGameState("idle")}
+                  variant="outline"
+                  className="font-display text-xl py-5 px-6 border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                >
+                  Kies Level
+                </Button>
+                <Link to="/games">
+                  <Button
+                    variant="outline"
+                    className="font-display text-xl py-5 px-6 border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+                  >
+                    Games
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

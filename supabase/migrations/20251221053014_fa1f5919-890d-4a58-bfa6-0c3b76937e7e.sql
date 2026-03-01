@@ -1,48 +1,53 @@
--- Add game score saving function
-CREATE OR REPLACE FUNCTION public.save_game_score(
-  p_user_id UUID,
-  p_game_type TEXT,
-  p_score INTEGER,
-  p_duration INTEGER DEFAULT NULL,
-  p_level INTEGER DEFAULT 1,
-  p_ducks_caught INTEGER DEFAULT 0,
-  p_accuracy DECIMAL DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
+-- Fix Remaining Security Issues
+
+-- 1. Restrict profiles SELECT - users should only see their own sensitive data
+-- But public profiles (username, avatar) should be visible
+-- Keep current permissive policy for now (social app needs it)
+-- Add a function to get public profile data safely
+CREATE OR REPLACE FUNCTION public.get_public_profile(user_id UUID)
+RETURNS TABLE(
+  id UUID,
+  username TEXT,
+  full_name TEXT,
+  avatar_url TEXT,
+  bio TEXT,
+  location TEXT
+) 
 SECURITY DEFINER
 AS $$
-DECLARE
-  v_quack_reward INTEGER;
-  v_session_id UUID;
-BEGIN
-  -- Calculate QUACK reward based on score
-  v_quack_reward := GREATEST(1, FLOOR(p_score / 100));
-  
-  -- Insert game session
-  INSERT INTO public.game_sessions (
-    user_id, game_type, score, duration_seconds,
-    level_reached, ducks_caught, accuracy, quack_earned
-  )
-  VALUES (
-    p_user_id, p_game_type, p_score, p_duration,
-    p_level, p_ducks_caught, p_accuracy, v_quack_reward
-  )
-  RETURNING id INTO v_session_id;
-  
-  -- Award QUACK tokens
-  UPDATE public.profiles
-  SET
-    quack_tokens = quack_tokens + v_quack_reward,
-    xp = xp + GREATEST(1, FLOOR(p_score / 50)),
-    level = GREATEST(1, FLOOR((xp + GREATEST(1, FLOOR(p_score / 50))) / 1000) + 1),
-    updated_at = NOW()
-  WHERE id = p_user_id;
-  
-  RETURN jsonb_build_object(
-    'success', true,
-    'session_id', v_session_id,
-    'quack_earned', v_quack_reward
+  SELECT id, username, full_name, avatar_url, bio, location
+  FROM public.profiles
+  WHERE profiles.id = user_id;
+$$ LANGUAGE sql;
+
+-- 2. Add function to safely check if duck exists
+CREATE OR REPLACE FUNCTION public.duck_exists(p_duck_id TEXT)
+RETURNS BOOLEAN
+SECURITY DEFINER
+AS $$
+  SELECT EXISTS(
+    SELECT 1 FROM public.ducks 
+    WHERE duck_id = p_duck_id AND is_active = true
   );
-END;
-$$;
+$$ LANGUAGE sql;
+
+-- 3. Add audit log for duck sightings (for spam prevention)
+CREATE TABLE IF NOT EXISTS public.sighting_rate_limits (
+  ip_hash TEXT NOT NULL,
+  duck_id TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  PRIMARY KEY (ip_hash, duck_id, created_at)
+);
+
+-- Enable RLS on rate limits table
+ALTER TABLE public.sighting_rate_limits ENABLE ROW LEVEL SECURITY;
+
+-- Only service role can access rate limits
+CREATE POLICY "Service role only" ON public.sighting_rate_limits
+  FOR ALL USING (false);
+
+-- 4. Add index for performance
+CREATE INDEX IF NOT EXISTS idx_duck_sightings_duck_id ON public.duck_sightings(duck_id);
+CREATE INDEX IF NOT EXISTS idx_duck_sightings_created_at ON public.duck_sightings(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_game_scores_game_type ON public.game_scores(game_type, score DESC);
+CREATE INDEX IF NOT EXISTS idx_ducks_duck_id ON public.ducks(duck_id);

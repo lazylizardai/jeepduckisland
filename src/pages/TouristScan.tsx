@@ -1,180 +1,136 @@
-import { useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import Navigation from "@/components/Navigation";
-import { Camera, QrCode, Upload, CheckCircle, XCircle, Loader2, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-
-const MOCK_VALID_CODES = {
-  "DUCK-001": { name: "Quacky McQuackface", rarity: "Common", points: 10, emoji: "🦆" },
-  "DUCK-042": { name: "Golden Quacker", rarity: "Legendary", points: 500, emoji: "👑" },
-  "DUCK-017": { name: "Surf Duck", rarity: "Rare", points: 100, emoji: "🌊" },
-  "DUCK-099": { name: "Alpine Explorer", rarity: "Epic", points: 250, emoji: "⛰️" },
-};
-
-const rarityColors: Record<string, string> = {
-  Common: "bg-gray-100 text-gray-800",
-  Uncommon: "bg-green-100 text-green-800",
-  Rare: "bg-blue-100 text-blue-800",
-  Epic: "bg-purple-100 text-purple-800",
-  Legendary: "bg-yellow-100 text-yellow-800",
-};
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { MapPin, Camera, MessageSquare, ArrowLeft, CheckCircle } from "lucide-react";
+import quackyJack from "@/assets/quacky-jack.png";
+import UploadDuckShotModal from "@/components/UploadDuckShotModal";
 
 const TouristScan = () => {
-  const [scanState, setScanState] = useState<"idle" | "scanning" | "success" | "error">("idle");
-  const [scannedDuck, setScannedDuck] = useState<any>(null);
-  const [manualCode, setManualCode] = useState("");
-  const [cameraActive, setCameraActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const { duckId } = useParams();
+  const [sightingNote, setSightingNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
-  const processCode = useCallback((code: string) => {
-    setScanState("scanning");
-    setTimeout(() => {
-      const upperCode = code.toUpperCase().trim();
-      const duck = MOCK_VALID_CODES[upperCode as keyof typeof MOCK_VALID_CODES];
-      if (duck) {
-        setScannedDuck({ ...duck, code: upperCode });
-        setScanState("success");
-        toast({
-          title: `Duck found! ${duck.emoji}`,
-          description: `${duck.name} - ${duck.rarity} (+${duck.points} pts)`,
-        });
-      } else {
-        setScanState("error");
-        toast({
-          title: "Invalid code",
-          description: "This duck code was not found.",
-          variant: "destructive",
-        });
-      }
-    }, 1500);
-  }, [toast]);
-
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (manualCode) processCode(manualCode);
-  };
-
-  const startCamera = async () => {
+  const handleSightingSubmit = async () => {
+    setIsSubmitting(true);
+    
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setCameraActive(true);
-      }
-    } catch (error) {
-      toast({ title: "Camera error", description: "Could not access camera.", variant: "destructive" });
+      const { error } = await supabase
+        .from("duck_sightings")
+        .insert({
+          duck_id: duckId,
+          note: sightingNote,
+          location_name: "Jeep Duck Island",
+        });
+
+      if (error) throw error;
+      
+      setSubmitted(true);
+      toast.success("Waarneming opgeslagen!");
+    } catch (error: any) {
+      toast.error("Er ging iets mis: " + error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-  };
-
-  const reset = () => {
-    setScanState("idle");
-    setScannedDuck(null);
-    setManualCode("");
-    stopCamera();
-  };
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-primary/20 via-secondary/10 to-accent/20 flex items-center justify-center p-4">
+        <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] text-center max-w-md">
+          <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-500" />
+          <h2 className="font-display text-4xl mb-4">Bedankt!</h2>
+          <p className="text-muted-foreground mb-6">
+            Je waarneming van eend {duckId} is opgeslagen in de DuckChain!
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Link to={`/duck/${duckId}`}>
+              <Button className="font-display border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                Bekijk DuckChain
+              </Button>
+            </Link>
+            <Link to="/">
+              <Button variant="outline" className="font-display border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                Home
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-duck-yellow/20 via-background to-duck-teal/20">
-      <Navigation />
-      <div className="pt-20 pb-10 container mx-auto px-4 max-w-2xl">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" onClick={() => navigate("/")}>
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
-          <h1 className="font-display text-4xl">Scan Duck QR</h1>
-        </div>
-
-        {scanState === "success" && scannedDuck ? (
-          <div className="card-tropical bg-card p-8 text-center">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <div className="text-6xl mb-4">{scannedDuck.emoji}</div>
-            <h2 className="font-display text-3xl mb-2">{scannedDuck.name}</h2>
-            <div className="flex justify-center gap-3 mb-6">
-              <Badge className={rarityColors[scannedDuck.rarity]}>{scannedDuck.rarity}</Badge>
-              <Badge className="bg-duck-yellow text-black">+{scannedDuck.points} pts</Badge>
-            </div>
-            <p className="font-body text-muted-foreground mb-6">Code: {scannedDuck.code}</p>
-            <div className="flex gap-3 justify-center">
-              <Button onClick={reset} className="btn-primary">Scan Another</Button>
-              <Button variant="outline" onClick={() => navigate("/")}>Go Home</Button>
-            </div>
-          </div>
-        ) : scanState === "error" ? (
-          <div className="card-tropical bg-card p-8 text-center">
-            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="font-display text-3xl mb-2">Invalid Code</h2>
-            <p className="font-body text-muted-foreground mb-6">That duck code was not found. Try again!</p>
-            <Button onClick={reset} className="btn-primary">Try Again</Button>
-          </div>
-        ) : scanState === "scanning" ? (
-          <div className="card-tropical bg-card p-8 text-center">
-            <Loader2 className="w-16 h-16 text-duck-orange mx-auto mb-4 animate-spin" />
-            <h2 className="font-display text-2xl">Verifying Duck...</h2>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Camera scan */}
-            <div className="card-tropical bg-card p-6">
-              <h2 className="font-display text-xl mb-4">Scan QR Code</h2>
-              {cameraActive ? (
-                <div className="space-y-4">
-                  <div className="relative rounded-2xl overflow-hidden border-4 border-outline">
-                    <video ref={videoRef} className="w-full" playsInline />
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-48 border-4 border-duck-yellow rounded-2xl opacity-70" />
-                    </div>
-                  </div>
-                  <div className="flex gap-3">
-                    <Button onClick={stopCamera} variant="outline" className="flex-1">Stop Camera</Button>
-                    <Button onClick={() => processCode("DUCK-001")} className="btn-primary flex-1">
-                      Simulate Scan
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <Button onClick={startCamera} className="btn-primary w-full text-lg py-4">
-                  <Camera className="w-5 h-5 mr-2" /> Open Camera
-                </Button>
-              )}
-            </div>
-
-            {/* Manual entry */}
-            <div className="card-tropical bg-card p-6">
-              <h2 className="font-display text-xl mb-4">Enter Code Manually</h2>
-              <form onSubmit={handleManualSubmit} className="flex gap-3">
-                <input
-                  type="text"
-                  value={manualCode}
-                  onChange={e => setManualCode(e.target.value)}
-                  placeholder="e.g. DUCK-001"
-                  className="flex-1 border-4 border-outline rounded-xl px-4 py-2 font-body text-lg bg-background"
-                />
-                <Button type="submit" className="btn-primary" disabled={!manualCode}>
-                  <QrCode className="w-4 h-4 mr-1" /> Verify
-                </Button>
-              </form>
-              <p className="font-body text-xs text-muted-foreground mt-2">
-                Try: DUCK-001, DUCK-042, DUCK-017, DUCK-099
-              </p>
-            </div>
-          </div>
-        )}
+    <div className="min-h-screen bg-gradient-to-b from-primary/20 via-secondary/10 to-accent/20">
+      {/* Header */}
+      <div className="container mx-auto px-4 py-6">
+        <Link to="/" className="inline-flex items-center text-foreground hover:text-primary transition-colors font-bold">
+          <ArrowLeft className="mr-2 h-5 w-5" />
+          Terug naar Home
+        </Link>
       </div>
+
+      <div className="container mx-auto px-4 pb-12">
+        <div className="max-w-lg mx-auto">
+          {/* Duck Card */}
+          <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] mb-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="font-display text-4xl">Eend gevonden!</h1>
+                <p className="text-muted-foreground">Duck ID: <span className="font-display text-primary">{duckId}</span></p>
+              </div>
+              <img src={quackyJack} alt="Duck" className="w-20 h-20 animate-bounce" />
+            </div>
+
+            {/* Actions */}
+            <div className="grid grid-cols-1 gap-3">
+              <Button
+                onClick={() => setShowUploadModal(true)}
+                variant="outline"
+                className="font-display text-lg py-5 border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+              >
+                <Camera className="mr-2 h-5 w-5" />
+                Upload een foto
+              </Button>
+            </div>
+          </div>
+
+          {/* Sighting Form */}
+          <div className="bg-card rounded-3xl p-6 border-4 border-foreground shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+            <h2 className="font-display text-2xl mb-4 flex items-center gap-2">
+              <MessageSquare className="h-6 w-6" />
+              Voeg een notitie toe
+            </h2>
+
+            <Textarea
+              placeholder="Waar heb je de eend gevonden? Vertel je verhaal..."
+              value={sightingNote}
+              onChange={(e) => setSightingNote(e.target.value)}
+              className="border-4 border-foreground shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] mb-4"
+              rows={4}
+            />
+
+            <Button
+              onClick={handleSightingSubmit}
+              disabled={isSubmitting}
+              className="w-full font-display text-xl py-6 bg-primary hover:bg-primary/90 text-primary-foreground border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+            >
+              <MapPin className="mr-2 h-5 w-5" />
+              {isSubmitting ? "Opslaan..." : "Meld waarneming"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <UploadDuckShotModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        duckId={duckId || ""}
+      />
     </div>
   );
 };

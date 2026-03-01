@@ -1,103 +1,143 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import Navigation from "@/components/Navigation";
-import { Search, MapPin, Filter } from "lucide-react";
-
-const DUCK_DATABASE = [
-  { id: "DUCK-001", name: "Quacky McQuackface", rarity: "Common", zone: "Beach Cove", owner: "QuackMaster9000", emoji: "🦆" },
-  { id: "DUCK-042", name: "Golden Quacker", rarity: "Legendary", zone: "Jeep Depot", owner: "IslandBoss", emoji: "👑" },
-  { id: "DUCK-017", name: "Surf Duck", rarity: "Rare", zone: "Lagoon", owner: "WaveRider", emoji: "🌊" },
-  { id: "DUCK-099", name: "Alpine Explorer", rarity: "Epic", zone: "Mountain Pass", owner: "PeakHunter", emoji: "⛰️" },
-  { id: "DUCK-123", name: "Jungle Jake", rarity: "Uncommon", zone: "Jungle Trail", owner: "TreeClimber", emoji: "🌿" },
-  { id: "DUCK-200", name: "Volcano Vince", rarity: "Legendary", zone: "Volcano Peak", owner: "FireWalker", emoji: "🌋" },
-];
-
-const rarityColors: Record<string, string> = {
-  Common: "bg-gray-100 text-gray-800",
-  Uncommon: "bg-green-100 text-green-800",
-  Rare: "bg-blue-100 text-blue-800",
-  Epic: "bg-purple-100 text-purple-800",
-  Legendary: "bg-yellow-100 text-yellow-800",
-};
+import { Search, ArrowLeft, QrCode } from "lucide-react";
+import quackyJack from "@/assets/quacky-jack.png";
 
 const DuckSearch = () => {
-  const [query, setQuery] = useState("");
-  const [filterRarity, setFilterRarity] = useState("All");
+  const [duckId, setDuckId] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const filtered = DUCK_DATABASE.filter(duck => {
-    const matchQuery =
-      duck.name.toLowerCase().includes(query.toLowerCase()) ||
-      duck.id.toLowerCase().includes(query.toLowerCase()) ||
-      duck.zone.toLowerCase().includes(query.toLowerCase()) ||
-      duck.owner.toLowerCase().includes(query.toLowerCase());
-    const matchRarity = filterRarity === "All" || duck.rarity === filterRarity;
-    return matchQuery && matchRarity;
-  });
+  const validateDuckId = (id: string): boolean => {
+    const pattern = /^QJ-\d{4}$/i;
+    return pattern.test(id.trim());
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedId = duckId.trim().toUpperCase();
+    
+    if (!trimmedId) {
+      setError("Voer een Duck ID in");
+      return;
+    }
+    
+    // Format to QJ-XXXX if user just entered numbers
+    let formattedId = trimmedId;
+    if (/^\d{4}$/.test(trimmedId)) {
+      formattedId = `QJ-${trimmedId}`;
+    } else if (/^QJ\d{4}$/i.test(trimmedId)) {
+      formattedId = `QJ-${trimmedId.slice(2)}`;
+    }
+    
+    if (!validateDuckId(formattedId)) {
+      setError("Ongeldig formaat. Gebruik QJ-0001 t/m QJ-9999");
+      return;
+    }
+    
+    setError("");
+    navigate(`/duck/${formattedId}`);
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-duck-yellow/20 via-background to-duck-teal/20">
-      <Navigation />
-      <div className="pt-20 pb-10 container mx-auto px-4 max-w-4xl">
-        <h1 className="font-display text-4xl mb-6">Duck Search 🔍</h1>
+    <div className="min-h-screen bg-gradient-to-b from-primary/20 via-secondary/10 to-accent/20">
+      {/* Header */}
+      <div className="container mx-auto px-4 py-6">
+        <Link to="/" className="inline-flex items-center text-foreground hover:text-primary transition-colors font-bold">
+          <ArrowLeft className="mr-2 h-5 w-5" />
+          Terug naar Home
+        </Link>
+      </div>
 
-        <div className="flex gap-3 mb-4 flex-wrap">
-          <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, ID, zone, or owner..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              className="pl-9 border-4 border-outline"
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {["All", "Common", "Uncommon", "Rare", "Epic", "Legendary"].map(r => (
-              <Button
-                key={r}
-                variant={filterRarity === r ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilterRarity(r)}
-              >
-                {r}
-              </Button>
-            ))}
-          </div>
-        </div>
+      {/* Main Content */}
+      <div className="container mx-auto px-4 pb-12">
+        <div className="max-w-lg mx-auto">
+          {/* Main Card */}
+          <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+            {/* Decorative elements */}
+            <div className="absolute -top-6 -right-6 w-24 h-24 bg-primary/30 rounded-full blur-2xl" />
+            <div className="absolute -bottom-6 -left-6 w-32 h-32 bg-secondary/30 rounded-full blur-2xl" />
+            
+            <div className="relative z-10">
+              {/* Duck Image */}
+              <div className="flex justify-center mb-6">
+                <img 
+                  src={quackyJack} 
+                  alt="Quacky Jack" 
+                  className="w-28 h-28 object-contain animate-float drop-shadow-xl"
+                />
+              </div>
 
-        <div className="space-y-3">
-          {filtered.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <span className="text-5xl block mb-3">🤷</span>
-              No ducks found matching your search.
-            </div>
-          ) : (
-            filtered.map(duck => (
-              <div
-                key={duck.id}
-                className="card-tropical bg-card p-4 flex items-center gap-4 hover-lift cursor-pointer"
-                onClick={() => navigate(`/duck/${duck.id}`)}
-              >
-                <span className="text-4xl">{duck.emoji}</span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-xl">{duck.name}</span>
-                    <Badge className={rarityColors[duck.rarity]}>{duck.rarity}</Badge>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <span>{duck.id}</span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />{duck.zone}
-                    </span>
-                    <span>Owner: {duck.owner}</span>
-                  </div>
+              {/* Title */}
+              <h1 className="font-display text-5xl md:text-6xl text-card text-outline-thick mb-4 text-center transform -rotate-1">
+                Zoek je Duck 🔍
+              </h1>
+              
+              <p className="text-center text-muted-foreground mb-8">
+                Voer de Duck ID in van je kaartje om de DuckChain te bekijken
+              </p>
+
+              {/* Search Form */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Input
+                    type="text"
+                    placeholder="Bijv. QJ-0421"
+                    value={duckId}
+                    onChange={(e) => {
+                      setDuckId(e.target.value.toUpperCase());
+                      setError("");
+                    }}
+                    className="w-full text-xl py-6 border-4 border-foreground font-display text-center uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-background"
+                  />
+                  {error && (
+                    <p className="text-coral text-sm mt-2 text-center font-medium">{error}</p>
+                  )}
+                </div>
+                
+                <Button 
+                  type="submit"
+                  className="w-full font-display text-xl py-6 bg-primary hover:bg-primary/90 text-primary-foreground border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                >
+                  <Search className="mr-2 h-5 w-5" />
+                  Bekijk DuckChain
+                </Button>
+              </form>
+
+              {/* QR Hint */}
+              <div className="mt-6 flex items-center justify-center gap-2 text-muted-foreground">
+                <QrCode className="h-4 w-4" />
+                <span className="text-sm">Of scan de QR op je kaartje</span>
+              </div>
+
+              {/* Example Links */}
+              <div className="mt-8 pt-6 border-t-2 border-foreground/10">
+                <p className="text-center text-sm text-muted-foreground mb-3">Probeer een voorbeeld:</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Link 
+                    to="/duck/QJ-0001" 
+                    className="font-display text-primary hover:text-primary/80 underline underline-offset-4 transition-colors"
+                  >
+                    QJ-0001
+                  </Link>
+                  <Link 
+                    to="/duck/QJ-0002" 
+                    className="font-display text-primary hover:text-primary/80 underline underline-offset-4 transition-colors"
+                  >
+                    QJ-0002
+                  </Link>
+                  <Link 
+                    to="/duck/QJ-0003" 
+                    className="font-display text-primary hover:text-primary/80 underline underline-offset-4 transition-colors"
+                  >
+                    QJ-0003
+                  </Link>
                 </div>
               </div>
-            ))
-          )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

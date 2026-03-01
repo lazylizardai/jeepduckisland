@@ -1,8 +1,20 @@
--- Insert some sample ducks
-INSERT INTO public.ducks (serial_number, name, rarity, zone, qr_code, emoji_code, message, is_active)
-VALUES
-  ('DUCK-001', 'Quacky McQuackface', 'Common', 'Beach Cove', 'DUCK-001', '🦆', 'Quack is the new black!', true),
-  ('DUCK-042', 'Golden Quacker', 'Legendary', 'Jeep Depot', 'DUCK-042', '👑', 'I am the one who quacks.', true),
-  ('DUCK-017', 'Surf Duck', 'Rare', 'Lagoon', 'DUCK-017', '🌊', 'Hang ten, quack on!', true),
-  ('DUCK-099', 'Alpine Explorer', 'Epic', 'Mountain Pass', 'DUCK-099', '⛰️', 'The peaks are calling.', true)
-ON CONFLICT (serial_number) DO NOTHING;
+-- Create game_scores table for Duck Shot leaderboard
+CREATE TABLE IF NOT EXISTS public.game_scores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_type TEXT NOT NULL,
+  nickname TEXT NOT NULL,
+  score INTEGER NOT NULL,
+  user_id UUID REFERENCES auth.users(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS
+ALTER TABLE public.game_scores ENABLE ROW LEVEL SECURITY;
+
+-- Anyone can view scores (for leaderboard)
+CREATE POLICY IF NOT EXISTS "Anyone can view scores" ON public.game_scores
+  FOR SELECT USING (true);
+
+-- Anyone can insert scores (even anonymous)
+CREATE POLICY IF NOT EXISTS "Anyone can insert scores" ON public.game_scores
+  FOR INSERT WITH CHECK (true);

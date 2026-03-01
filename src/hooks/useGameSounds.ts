@@ -1,18 +1,19 @@
 import { useCallback, useRef } from "react";
 
-type SoundType = "quack" | "hit" | "miss" | "levelUp" | "gameOver" | "combo";
+type SoundType = "quack" | "win" | "gameStart" | "cardFlip" | "match" | "tileMove";
 
-const SOUND_FREQUENCIES: Record<SoundType, { freq: number; duration: number; type: OscillatorType }> = {
-  quack: { freq: 440, duration: 0.15, type: "sawtooth" },
-  hit: { freq: 660, duration: 0.1, type: "square" },
-  miss: { freq: 200, duration: 0.2, type: "sawtooth" },
-  levelUp: { freq: 880, duration: 0.3, type: "sine" },
-  gameOver: { freq: 150, duration: 0.5, type: "sawtooth" },
-  combo: { freq: 770, duration: 0.2, type: "triangle" },
+const SOUND_CONFIGS: Record<SoundType, { frequency: number; duration: number; type: OscillatorType; pattern?: number[] }> = {
+  quack: { frequency: 600, duration: 0.15, type: "sine", pattern: [1, 0.5] },
+  win: { frequency: 523, duration: 0.8, type: "sine", pattern: [1, 1.25, 1.5, 2] },
+  gameStart: { frequency: 440, duration: 0.6, type: "square", pattern: [1, 1.2, 1.5] },
+  cardFlip: { frequency: 800, duration: 0.08, type: "triangle" },
+  match: { frequency: 660, duration: 0.4, type: "sine", pattern: [1, 1.5] },
+  tileMove: { frequency: 400, duration: 0.06, type: "square" },
 };
 
-export const useGameSounds = (enabled: boolean = true) => {
+export const useGameSounds = () => {
   const audioContextRef = useRef<AudioContext | null>(null);
+  const enabledRef = useRef(true);
 
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -22,41 +23,52 @@ export const useGameSounds = (enabled: boolean = true) => {
   }, []);
 
   const playSound = useCallback((soundType: SoundType) => {
-    if (!enabled) return;
+    if (!enabledRef.current) return;
+
     try {
       const ctx = getAudioContext();
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
+      const config = SOUND_CONFIGS[soundType];
+      const { pattern } = config;
 
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
+      if (pattern) {
+        pattern.forEach((multiplier, i) => {
+          const oscillator = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+          oscillator.connect(gainNode);
+          gainNode.connect(ctx.destination);
 
-      const { freq, duration, type } = SOUND_FREQUENCIES[soundType];
-      oscillator.type = type;
-      oscillator.frequency.setValueAtTime(freq, ctx.currentTime);
+          oscillator.type = config.type;
+          oscillator.frequency.setValueAtTime(config.frequency * multiplier, ctx.currentTime + i * 0.1);
 
-      if (soundType === "levelUp") {
-        oscillator.frequency.exponentialRampToValueAtTime(freq * 2, ctx.currentTime + duration);
-      } else if (soundType === "gameOver") {
-        oscillator.frequency.exponentialRampToValueAtTime(freq * 0.5, ctx.currentTime + duration);
+          gainNode.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.1);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + config.duration);
+
+          oscillator.start(ctx.currentTime + i * 0.1);
+          oscillator.stop(ctx.currentTime + i * 0.1 + config.duration);
+        });
+      } else {
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        oscillator.type = config.type;
+        oscillator.frequency.setValueAtTime(config.frequency, ctx.currentTime);
+
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + config.duration);
+
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + config.duration);
       }
-
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
-
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + duration);
-    } catch (error) {
-      // Silently fail if audio is not available
+    } catch (e) {
+      // Silently fail if audio context is not available
     }
-  }, [enabled, getAudioContext]);
+  }, [getAudioContext]);
 
-  const playQuack = useCallback(() => playSound("quack"), [playSound]);
-  const playHit = useCallback(() => playSound("hit"), [playSound]);
-  const playMiss = useCallback(() => playSound("miss"), [playSound]);
-  const playLevelUp = useCallback(() => playSound("levelUp"), [playSound]);
-  const playGameOver = useCallback(() => playSound("gameOver"), [playSound]);
-  const playCombo = useCallback(() => playSound("combo"), [playSound]);
+  const setSoundEnabled = useCallback((enabled: boolean) => {
+    enabledRef.current = enabled;
+  }, []);
 
-  return { playQuack, playHit, playMiss, playLevelUp, playGameOver, playCombo, playSound };
+  return { playSound, setSoundEnabled };
 };

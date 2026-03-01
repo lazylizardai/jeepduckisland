@@ -1,134 +1,146 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import Navigation from "@/components/Navigation";
-import { Download, Smartphone, Monitor, Chrome, Apple, Globe } from "lucide-react";
+import { ArrowLeft, Download, Smartphone, Monitor, Apple, Chrome } from "lucide-react";
+import { Link } from "react-router-dom";
+
+type DeviceType = "ios" | "android" | "desktop" | "unknown";
 
 const Install = () => {
-  const [installed, setInstalled] = useState(false);
+  const [deviceType, setDeviceType] = useState<DeviceType>("unknown");
+  const [isInstallable, setIsInstallable] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
+  useEffect(() => {
+    // Detect device type
+    const ua = navigator.userAgent.toLowerCase();
+    if (/iphone|ipad|ipod/.test(ua)) {
+      setDeviceType("ios");
+    } else if (/android/.test(ua)) {
+      setDeviceType("android");
+    } else {
+      setDeviceType("desktop");
+    }
+
+    // Listen for PWA install prompt
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
   const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") {
-        setInstalled(true);
-      }
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") {
+      setIsInstallable(false);
       setDeferredPrompt(null);
     }
   };
 
-  const steps = [
-    {
-      platform: "Android (Chrome)",
-      icon: Chrome,
-      color: "text-green-500",
-      bg: "bg-green-50",
-      steps: [
-        "Open JeepDuck Island in Chrome",
-        "Tap the menu (three dots) in the top right",
-        "Select 'Add to Home screen'",
-        "Confirm by tapping 'Add'",
-      ],
-    },
-    {
-      platform: "iOS (Safari)",
-      icon: Apple,
-      color: "text-gray-700",
-      bg: "bg-gray-50",
-      steps: [
-        "Open JeepDuck Island in Safari",
-        "Tap the Share button (square with arrow)",
-        "Scroll down and tap 'Add to Home Screen'",
-        "Tap 'Add' to confirm",
-      ],
-    },
-    {
-      platform: "Desktop (Chrome/Edge)",
-      icon: Monitor,
-      color: "text-blue-500",
-      bg: "bg-blue-50",
-      steps: [
-        "Open JeepDuck Island in Chrome or Edge",
-        "Look for the install icon in the address bar",
-        "Click 'Install' when prompted",
-        "Or use the button below if available",
-      ],
-    },
-  ];
+  const steps = {
+    ios: [
+      { step: 1, icon: "⬆️", text: "Tik op de Deel-knop (vakje met pijl omhoog) onderaan Safari" },
+      { step: 2, icon: "➕", text: "Scroll naar beneden en tik op 'Zet op beginscherm'" },
+      { step: 3, icon: "✅", text: "Tik op 'Voeg toe' rechtsboven" },
+      { step: 4, icon: "🦆", text: "JeepDuckIsland staat nu op je beginscherm!" },
+    ],
+    android: [
+      { step: 1, icon: "⋮", text: "Tik op de 3 puntjes (menu) rechtsboven in Chrome" },
+      { step: 2, icon: "➕", text: "Tik op 'Toevoegen aan startscherm'" },
+      { step: 3, icon: "✅", text: "Tik op 'Toevoegen' in het pop-upvenster" },
+      { step: 4, icon: "🦆", text: "JeepDuckIsland staat nu op je startscherm!" },
+    ],
+    desktop: [
+      { step: 1, icon: "💻", text: "Klik op het installatie-icoontje in de adresbalk (Chrome/Edge)" },
+      { step: 2, icon: "➕", text: "Klik op 'Installeren' in het pop-upvenster" },
+      { step: 3, icon: "✅", text: "De app wordt geïnstalleerd als desktopapp" },
+      { step: 4, icon: "🦆", text: "JeepDuckIsland staat nu in je apps!" },
+    ],
+    unknown: [
+      { step: 1, icon: "🌐", text: "Open deze pagina in Chrome of Safari" },
+      { step: 2, icon: "⋮", text: "Zoek de optie 'Toevoegen aan startscherm' of 'Installeren'" },
+      { step: 3, icon: "✅", text: "Volg de instructies om de app te installeren" },
+      { step: 4, icon: "🦆", text: "JeepDuckIsland staat nu op je apparaat!" },
+    ],
+  };
+
+  const deviceIcon = {
+    ios: <Apple className="h-8 w-8" />,
+    android: <Smartphone className="h-8 w-8" />,
+    desktop: <Monitor className="h-8 w-8" />,
+    unknown: <Chrome className="h-8 w-8" />,
+  };
+
+  const deviceName = {
+    ios: "iPhone / iPad",
+    android: "Android",
+    desktop: "Desktop",
+    unknown: "Jouw apparaat",
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-duck-yellow/20 via-background to-duck-teal/20">
-      <Navigation />
-      <div className="pt-20 pb-10 container mx-auto px-4 max-w-4xl">
-        <div className="text-center mb-10">
-          <div className="text-6xl mb-4 animate-bounce">🦆</div>
-          <h1 className="font-display text-5xl mb-3">Install the App</h1>
-          <p className="font-body text-xl text-muted-foreground max-w-2xl mx-auto">
-            Get the full JeepDuck Island experience by installing the app on your device!
-          </p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-b from-primary/20 via-secondary/10 to-accent/20">
+      {/* Header */}
+      <div className="container mx-auto px-4 py-6">
+        <Link to="/" className="inline-flex items-center text-foreground hover:text-primary transition-colors font-bold">
+          <ArrowLeft className="mr-2 h-5 w-5" />
+          Terug
+        </Link>
+      </div>
 
-        {/* Install button for supported browsers */}
-        <div className="card-tropical bg-duck-yellow p-8 text-center mb-8">
-          <Smartphone className="w-12 h-12 mx-auto mb-4 text-black" />
-          <h2 className="font-display text-3xl mb-3">Quick Install</h2>
-          <p className="font-body mb-6 text-black/80">
-            If your browser supports it, click below to install directly!
-          </p>
-          {installed ? (
-            <div className="font-display text-2xl text-green-700">
-              ✅ App Installed! Check your home screen.
-            </div>
-          ) : (
-            <Button
-              onClick={handleInstall}
-              className="btn-primary text-lg px-8 py-4"
-              disabled={!deferredPrompt}
-            >
-              <Download className="w-5 h-5 mr-2" />
-              {deferredPrompt ? "Install App" : "Follow steps below to install"}
-            </Button>
-          )}
-        </div>
+      <div className="container mx-auto px-4 pb-12">
+        <div className="max-w-lg mx-auto">
+          {/* Header Card */}
+          <div className="bg-card rounded-3xl p-8 border-4 border-foreground shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] text-center mb-6">
+            <div className="text-6xl mb-4">📲</div>
+            <h1 className="font-display text-5xl text-foreground mb-2">Installeer de App</h1>
+            <p className="text-muted-foreground">
+              Voeg JeepDuckIsland toe aan je startscherm voor de beste ervaring!
+            </p>
+          </div>
 
-        {/* Platform instructions */}
-        <div className="grid md:grid-cols-3 gap-6">
-          {steps.map((platform, i) => (
-            <div key={i} className="card-tropical bg-card p-6">
-              <div className={`w-12 h-12 ${platform.bg} rounded-2xl flex items-center justify-center mb-4`}>
-                <platform.icon className={`w-6 h-6 ${platform.color}`} />
+          {/* Device Detection */}
+          <div className="bg-card rounded-2xl p-6 border-4 border-foreground shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              {deviceIcon[deviceType]}
+              <div>
+                <p className="font-display text-xl">Gedetecteerd: {deviceName[deviceType]}</p>
+                <p className="text-sm text-muted-foreground">Instructies zijn aangepast voor jouw apparaat</p>
               </div>
-              <h3 className="font-display text-xl mb-4">{platform.platform}</h3>
-              <ol className="space-y-3">
-                {platform.steps.map((step, j) => (
-                  <li key={j} className="flex gap-3 font-body text-sm">
-                    <span className="w-6 h-6 bg-duck-yellow rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {j + 1}
-                    </span>
-                    {step}
-                  </li>
-                ))}
-              </ol>
             </div>
-          ))}
-        </div>
 
-        {/* Benefits */}
-        <div className="card-tropical bg-card p-6 mt-8">
-          <h2 className="font-display text-2xl mb-4">Why Install?</h2>
-          <div className="grid md:grid-cols-3 gap-4">
-            {[
-              { emoji: "⚡", title: "Faster", desc: "Loads instantly, even offline" },
-              { emoji: "🔔", title: "Notifications", desc: "Get alerts for rare ducks" },
-              { emoji: "📱", title: "Native Feel", desc: "Full screen, no browser bar" },
-            ].map((benefit, i) => (
-              <div key={i} className="text-center p-4 bg-muted rounded-2xl">
-                <div className="text-3xl mb-2">{benefit.emoji}</div>
-                <div className="font-display text-lg">{benefit.title}</div>
-                <div className="font-body text-sm text-muted-foreground">{benefit.desc}</div>
-              </div>
-            ))}
+            {/* Install Button for Android/Desktop */}
+            {isInstallable && (
+              <Button
+                onClick={handleInstall}
+                className="w-full font-display text-xl py-6 bg-primary hover:bg-primary/90 text-primary-foreground border-4 border-foreground shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all mb-4"
+              >
+                <Download className="mr-2 h-6 w-6" />
+                Installeer Nu!
+              </Button>
+            )}
+          </div>
+
+          {/* Steps */}
+          <div className="bg-card rounded-2xl p-6 border-4 border-foreground shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+            <h2 className="font-display text-2xl mb-4">Stap voor stap:</h2>
+            <div className="space-y-4">
+              {steps[deviceType].map((step) => (
+                <div key={step.step} className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-primary border-4 border-foreground flex items-center justify-center font-display text-xl text-primary-foreground flex-shrink-0">
+                    {step.step}
+                  </div>
+                  <div className="flex items-start gap-2 pt-1">
+                    <span className="text-2xl">{step.icon}</span>
+                    <p className="text-foreground">{step.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

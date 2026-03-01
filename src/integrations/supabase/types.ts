@@ -4,283 +4,263 @@ export type Json =
   | boolean
   | null
   | { [key: string]: Json | undefined }
-  | Json[]
+  | Json[];
 
 export type Database = {
   public: {
     Tables: {
       duck_sightings: {
         Row: {
-          created_at: string
-          duck_id: string | null
-          id: string
-          image_url: string | null
-          latitude: number | null
-          location_name: string | null
-          longitude: number | null
-          notes: string | null
-          rarity: string | null
-          user_id: string | null
-          verified: boolean | null
-        }
+          created_at: string;
+          duck_id: string | null;
+          id: string;
+          image_url: string | null;
+          location_lat: number | null;
+          location_lng: number | null;
+          location_name: string | null;
+          note: string | null;
+          user_id: string | null;
+        };
         Insert: {
-          created_at?: string
-          duck_id?: string | null
-          id?: string
-          image_url?: string | null
-          latitude?: number | null
-          location_name?: string | null
-          longitude?: number | null
-          notes?: string | null
-          rarity?: string | null
-          user_id?: string | null
-          verified?: boolean | null
-        }
+          created_at?: string;
+          duck_id?: string | null;
+          id?: string;
+          image_url?: string | null;
+          location_lat?: number | null;
+          location_lng?: number | null;
+          location_name?: string | null;
+          note?: string | null;
+          user_id?: string | null;
+        };
         Update: {
-          created_at?: string
-          duck_id?: string | null
-          id?: string
-          image_url?: string | null
-          latitude?: number | null
-          location_name?: string | null
-          longitude?: number | null
-          notes?: string | null
-          rarity?: string | null
-          user_id?: string | null
-          verified?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "duck_sightings_duck_id_fkey"
-            columns: ["duck_id"]
-            isOneToOne: false
-            referencedRelation: "ducks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "duck_sightings_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+          created_at?: string;
+          duck_id?: string | null;
+          id?: string;
+          image_url?: string | null;
+          location_lat?: number | null;
+          location_lng?: number | null;
+          location_name?: string | null;
+          note?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       ducks: {
         Row: {
-          created_at: string
-          current_owner_id: string | null
-          description: string | null
-          emoji_code: string | null
-          id: string
-          image_url: string | null
-          is_active: boolean | null
-          message: string | null
-          name: string | null
-          nft_token_id: string | null
-          qr_code: string | null
-          rarity: string | null
-          serial_number: string | null
-          zone: string | null
-        }
+          created_at: string;
+          description: string | null;
+          duck_id: string;
+          id: string;
+          image_url: string | null;
+          is_active: boolean | null;
+          owner_id: string | null;
+          owner_name: string | null;
+          rarity: string | null;
+          series: string | null;
+        };
         Insert: {
-          created_at?: string
-          current_owner_id?: string | null
-          description?: string | null
-          emoji_code?: string | null
-          id?: string
-          image_url?: string | null
-          is_active?: boolean | null
-          message?: string | null
-          name?: string | null
-          nft_token_id?: string | null
-          qr_code?: string | null
-          rarity?: string | null
-          serial_number?: string | null
-          zone?: string | null
-        }
+          created_at?: string;
+          description?: string | null;
+          duck_id: string;
+          id?: string;
+          image_url?: string | null;
+          is_active?: boolean | null;
+          owner_id?: string | null;
+          owner_name?: string | null;
+          rarity?: string | null;
+          series?: string | null;
+        };
         Update: {
-          created_at?: string
-          current_owner_id?: string | null
-          description?: string | null
-          emoji_code?: string | null
-          id?: string
-          image_url?: string | null
-          is_active?: boolean | null
-          message?: string | null
-          name?: string | null
-          nft_token_id?: string | null
-          qr_code?: string | null
-          rarity?: string | null
-          serial_number?: string | null
-          zone?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ducks_current_owner_id_fkey"
-            columns: ["current_owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+          created_at?: string;
+          description?: string | null;
+          duck_id?: string | null;
+          id?: string;
+          image_url?: string | null;
+          is_active?: boolean | null;
+          owner_id?: string | null;
+          owner_name?: string | null;
+          rarity?: string | null;
+          series?: string | null;
+        };
+        Relationships: [];
+      };
+      game_scores: {
+        Row: {
+          created_at: string;
+          game_type: string;
+          id: string;
+          nickname: string;
+          score: number;
+          user_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          game_type: string;
+          id?: string;
+          nickname: string;
+          score: number;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          game_type?: string;
+          id?: string;
+          nickname?: string;
+          score?: number;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
-          avatar_emoji: string | null
-          created_at: string
-          ducks_spotted: number | null
-          id: string
-          level: number | null
-          quack_tokens: number | null
-          rank: number | null
-          updated_at: string
-          username: string | null
-          xp: number | null
-        }
+          avatar_url: string | null;
+          bio: string | null;
+          created_at: string;
+          full_name: string | null;
+          id: string;
+          location: string | null;
+          updated_at: string;
+          username: string | null;
+        };
         Insert: {
-          avatar_emoji?: string | null
-          created_at?: string
-          ducks_spotted?: number | null
-          id: string
-          level?: number | null
-          quack_tokens?: number | null
-          rank?: number | null
-          updated_at?: string
-          username?: string | null
-          xp?: number | null
-        }
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string;
+          full_name?: string | null;
+          id: string;
+          location?: string | null;
+          updated_at?: string;
+          username?: string | null;
+        };
         Update: {
-          avatar_emoji?: string | null
-          created_at?: string
-          ducks_spotted?: number | null
-          id?: string
-          level?: number | null
-          quack_tokens?: number | null
-          rank?: number | null
-          updated_at?: string
-          username?: string | null
-          xp?: number | null
-        }
-        Relationships: []
-      }
-    }
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string;
+          full_name?: string | null;
+          id?: string;
+          location?: string | null;
+          updated_at?: string;
+          username?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey";
+            columns: ["id"];
+            isOneToOne: true;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+    };
     Views: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     Functions: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     Enums: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-}
+      [_ in never]: never;
+    };
+  };
+};
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type PublicSchema = Database[Extract<keyof Database, "public">];
 
 export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  PublicTableNameOrOptions extends
+    | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
     | { schema: keyof Database },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R;
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
+  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
+      PublicSchema["Views"])
+  ? (PublicSchema["Tables"] &
+      PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+      Row: infer R;
+    }
+    ? R
     : never
+  : never;
 
 export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I;
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+  ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+      Insert: infer I;
+    }
+    ? I
     : never
+  : never;
 
 export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
+  PublicTableNameOrOptions extends
+    | keyof PublicSchema["Tables"]
     | { schema: keyof Database },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U;
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
+  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
+  ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+      Update: infer U;
+    }
+    ? U
     : never
+  : never;
 
 export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
+  PublicEnumNameOrOptions extends
+    | keyof PublicSchema["Enums"]
     | { schema: keyof Database },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
-  }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
+    : never = never
+> = PublicEnumNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
+  ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+  : never;
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
+    | keyof PublicSchema["CompositeTypes"]
     | { schema: keyof Database },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof Database;
   }
     ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never = never
 > = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
   ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
+  ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never;
